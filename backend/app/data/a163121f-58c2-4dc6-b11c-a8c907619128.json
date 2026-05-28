@@ -1,0 +1,19 @@
+{
+  "id": "a163121f-58c2-4dc6-b11c-a8c907619128",
+  "name": "UML-a163121f",
+  "model": {
+    "classes": [
+      {
+        "id": "069d0058-5be2-4565-9858-32a3c673c24f",
+        "name": "NewClass",
+        "visibility": "public",
+        "isAbstract": false,
+        "attributes": [],
+        "methods": []
+      }
+    ],
+    "relations": [],
+    "id": "a163121f-58c2-4dc6-b11c-a8c907619128"
+  },
+  "createdAt": "2026-05-28T09:18:12.545308Z"
+}

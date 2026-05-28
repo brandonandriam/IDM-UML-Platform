@@ -1,0 +1,26 @@
+[comment encoding = UTF-8 /]
+[module JavaClass('http://www.eclipse.org/uml2/5.0.0/UML')]
+
+[template public generateElement(c : UMLClass)]
+[if (c.isAbstract)]abstract [/if]public class [c.name/]
+[if (c.oclIsKindOf(UMLRelation) and c.type = 'inheritance')]
+  extends [c.target.name/]
+[/if]
+{
+[for (attr : UMLAttribute | c.attributes)]
+    [attr.visibility/] [attr.type/] [attr.name/];
+[/for]
+
+    public [c.name/]() {
+    }
+
+[for (method : UMLMethod | c.methods)]
+    [method.visibility/] [method.returnType/] [method.name/](
+    [for (param : UMLMethodParameter | method.parameters)]
+        [param.type/] [param.name/][if (param <> method.parameters->last())], [/if]
+    [/for]
+    ) {
+    }
+[/for]
+}
+[/template]

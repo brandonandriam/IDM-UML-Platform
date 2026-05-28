@@ -1,0 +1,24 @@
+[comment encoding = UTF-8 /]
+[module PythonClass('http://www.eclipse.org/uml2/5.0.0/UML')]
+
+[template public generateElement(c : UMLClass)]
+class [c.name/]:
+    def __init__(self):
+[if (c.attributes->notEmpty())]
+[for (attr : UMLAttribute | c.attributes)]
+        self.[attr.name/] : [attr.type/] = None
+[/for]
+[/if]
+[if (c.attributes->isEmpty())]
+        pass
+[/if]
+
+[for (method : UMLMethod | c.methods)]
+    def [method.name/](self[if (method.parameters->notEmpty())], [/if]
+    [for (param : UMLMethodParameter | method.parameters)]
+        [param.name/]: [param.type/][if (param <> method.parameters->last())], [/if]
+    [/for]
+    ) -> [method.returnType/] :
+        pass
+[/for]
+[/template]

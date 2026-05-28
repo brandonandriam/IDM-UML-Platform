@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.pyo
+*.pycache
+.env
+.venv
+venv/
+
+# Node
+node_modules/
+dist/
+build/
+.env.local
+.DS_Store
+
+# IDE
+.vscode/
+
+# Generated files
+backend/data/

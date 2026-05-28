@@ -1,0 +1,58 @@
+{
+  "id": "ca98cb4c-3bee-49fa-861e-222e4eb332ad",
+  "name": "UML-ca98cb4c",
+  "model": {
+    "classes": [
+      {
+        "id": "bb54896d-eed6-4878-9362-685451d817dc",
+        "name": "Person",
+        "visibility": "public",
+        "isAbstract": false,
+        "attributes": [
+          {
+            "id": "9057422d-70fe-4d81-ba3f-e279c22cda12",
+            "name": "name",
+            "type": "String",
+            "visibility": "public",
+            "multiplicity": "10"
+          },
+          {
+            "id": "edbaadb2-64e1-4e0c-a87e-25bc21819dba",
+            "name": "Age",
+            "type": "Int",
+            "visibility": "public",
+            "multiplicity": "3"
+          }
+        ],
+        "methods": []
+      },
+      {
+        "id": "093ce1f1-cb1f-4aac-82d1-d5f2f8add7c0",
+        "name": "Employee",
+        "visibility": "public",
+        "isAbstract": false,
+        "attributes": [
+          {
+            "id": "a4d42c87-fed9-488e-8834-578dc7c8da73",
+            "name": "employeeId",
+            "type": "String",
+            "visibility": "public",
+            "multiplicity": "2"
+          }
+        ],
+        "methods": []
+      }
+    ],
+    "relations": [
+      {
+        "id": "099f9dff-dd4e-48a1-8088-effd8cebf524",
+        "source": "bb54896d-eed6-4878-9362-685451d817dc",
+        "target": "093ce1f1-cb1f-4aac-82d1-d5f2f8add7c0",
+        "type": "inheritance",
+        "cardinality": "1"
+      }
+    ],
+    "id": "ca98cb4c-3bee-49fa-861e-222e4eb332ad"
+  },
+  "createdAt": "2026-05-28T08:54:32.695368Z"
+}

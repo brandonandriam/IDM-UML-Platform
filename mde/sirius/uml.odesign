@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource xsi:type="sirius:Model" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:sirius="http://www.eclipse.org/sirius/diagram/description/1.0">
+  <name>uml.odesign</name>
+  <ownedViews>
+    <diagramDescription name="UML Class Diagram" label="UML Class Diagram" domainClass="uml.UMLModel" elementMappings="classMapping relationMapping"/>
+  </ownedViews>
+  <ownedRepresentations>
+    <representationDescription name="Diagram" titleExpression="'UML Diagram'" defaultLayer="true"/>
+  </ownedRepresentations>
+  <ownedTools>
+    <tool name="Create UML Class" type="nodeCreation" targetMapping="classMapping" rootContainer="true"/>
+    <tool name="Create Relation" type="edgeCreation" sourceMapping="classMapping" targetMapping="classMapping" edgeMapping="relationMapping"/>
+  </ownedTools>
+  <ownedLayers>
+    <layer name="default"/>
+  </ownedLayers>
+  <mappings>
+    <nodeMapping name="classMapping" domainClass="uml.UMLClass" labelExpression="aql:self.name">
+      <style labelSize="12" labelExpression="self.name"/>
+    </nodeMapping>
+    <edgeMapping name="relationMapping" domainClass="uml.UMLRelation" sourceMapping="classMapping" targetMapping="classMapping" labelExpression="aql:self.type"/>
+  </mappings>
+</resource>

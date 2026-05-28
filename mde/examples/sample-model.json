@@ -1,0 +1,30 @@
+{
+  "classes": [
+    {
+      "id": "class1",
+      "name": "Person",
+      "visibility": "public",
+      "isAbstract": false,
+      "attributes": [
+        { "id": "attr1", "name": "name", "type": "String", "visibility": "private", "multiplicity": "1" },
+        { "id": "attr2", "name": "age", "type": "int", "visibility": "private", "multiplicity": "1" }
+      ],
+      "methods": [
+        { "id": "method1", "name": "getName", "returnType": "String", "visibility": "public", "parameters": [] }
+      ]
+    },
+    {
+      "id": "class2",
+      "name": "Employee",
+      "visibility": "public",
+      "isAbstract": false,
+      "attributes": [
+        { "id": "attr3", "name": "employeeId", "type": "String", "visibility": "private", "multiplicity": "1" }
+      ],
+      "methods": []
+    }
+  ],
+  "relations": [
+    { "id": "rel1", "source": "class2", "target": "class1", "type": "inheritance", "cardinality": "1" }
+  ]
+}
