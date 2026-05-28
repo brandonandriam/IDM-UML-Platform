@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
   addEdge,
@@ -6,8 +6,6 @@ import ReactFlow, {
   Controls,
   MiniMap,
   Node,
-  applyEdgeChanges,
-  applyNodeChanges,
   Connection,
   Edge,
   MarkerType,
@@ -15,6 +13,7 @@ import ReactFlow, {
   useNodesState
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import JSZip from 'jszip';
 import { v4 as uuid } from 'uuid';
 import { RelationType, UMLAttribute, UMLClass, UMLMethod, UMLMethodParameter, UMLModel, UMLRelation, Visibility } from '../types/uml';
 import { createModel, generateJava, generatePython } from '../services/api';
@@ -105,10 +104,324 @@ const removeMethodFromClass = (cls: UMLClass, methodId: string): UMLClass => ({
   methods: cls.methods.filter((method) => method.id !== methodId)
 });
 
+const parseJavaCode = (content: string) => {
+  const classes: UMLClass[] = [];
+  let current: { cls: UMLClass; extendsName?: string } | null = null;
+  const lines = content.split(/\r?\n/);
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const classMatch = line.match(/(?:public\s+)?(?:abstract\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)/);
+    if (classMatch) {
+      if (current) {
+        classes.push(current.cls);
+      }
+      const className = classMatch[1];
+      const isAbstract = /abstract\s+class/.test(line);
+      const extendsMatch = line.match(/extends\s+([A-Za-z_][A-Za-z0-9_]*)/);
+      current = {
+        cls: {
+          id: uuid(),
+          name: className,
+          visibility: 'public',
+          isAbstract,
+          attributes: [],
+          methods: []
+        },
+        extendsName: extendsMatch?.[1]
+      };
+      continue;
+    }
+
+    if (!current) {
+      continue;
+    }
+
+    const fieldMatch = line.match(/(?:public|protected|private)\s+([A-Za-z0-9_<>\[\]]+)\s+([A-Za-z_][A-Za-z0-9_]*)\s*;/);
+    if (fieldMatch && !/\bstatic\b/.test(line)) {
+      current.cls.attributes.push({
+        id: uuid(),
+        name: fieldMatch[2],
+        type: fieldMatch[1],
+        visibility: 'private',
+        multiplicity: '1'
+      });
+      continue;
+    }
+
+    const methodMatch = line.match(/(?:public|protected|private)\s+([A-Za-z0-9_<>\[\]]+)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)/);
+    if (methodMatch) {
+      const methodName = methodMatch[2];
+      if (methodName === current.cls.name) {
+        continue;
+      }
+      const params = methodMatch[3]
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((param) => {
+          const parts = param.split(/\s+/);
+          return {
+            id: uuid(),
+            name: parts[parts.length - 1] ?? 'arg',
+            type: parts.slice(0, -1).join(' ') || 'Object'
+          };
+        });
+      current.cls.methods.push({
+        id: uuid(),
+        name: methodName,
+        returnType: methodMatch[1],
+        visibility: 'public',
+        parameters: params
+      });
+      continue;
+    }
+  }
+
+  if (current) {
+    classes.push(current.cls);
+  }
+
+  return classes;
+};
+
+const parsePythonCode = (content: string) => {
+  const classes: UMLClass[] = [];
+  let current: UMLClass | null = null;
+  let inInit = false;
+  const lines = content.split(/\r?\n/);
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    const classMatch = line.match(/^class\s+([A-Za-z_][A-Za-z0-9_]*)\s*[:(]/);
+    if (classMatch) {
+      if (current) {
+        classes.push(current);
+      }
+      current = {
+        id: uuid(),
+        name: classMatch[1],
+        visibility: 'public',
+        isAbstract: false,
+        attributes: [],
+        methods: []
+      };
+      inInit = false;
+      continue;
+    }
+
+    if (!current) {
+      continue;
+    }
+
+    const initMatch = line.match(/^def\s+__init__\s*\(([^)]*)\)\s*:/);
+    if (initMatch) {
+      inInit = true;
+      continue;
+    }
+
+    if (/^def\s+[A-Za-z_][A-Za-z0-9_]*\s*\(/.test(line)) {
+      inInit = false;
+      const methodMatch = line.match(/^def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?:->\s*([A-Za-z0-9_\.]+))?\s*:/);
+      if (methodMatch) {
+        const methodName = methodMatch[1];
+        if (methodName === '__init__') {
+          continue;
+        }
+        const params = methodMatch[2]
+          .split(',')
+          .map((p) => p.trim())
+          .filter((p) => p && !/^self$/.test(p))
+          .map((param) => {
+            const [name, type] = param.split(':').map((part) => part.trim());
+            return {
+              id: uuid(),
+              name: name || 'arg',
+              type: type || 'Any'
+            };
+          });
+        current.methods.push({
+          id: uuid(),
+          name: methodName,
+          returnType: methodMatch[3] || 'None',
+          visibility: 'public',
+          parameters: params
+        });
+      }
+      continue;
+    }
+
+    if (inInit) {
+      const attrMatch = line.match(/self\.([A-Za-z_][A-Za-z0-9_]*)\s*:?\s*([A-Za-z0-9_\.]+)?\s*=\s*/);
+      if (attrMatch) {
+        current.attributes.push({
+          id: uuid(),
+          name: attrMatch[1],
+          type: attrMatch[2] || 'Any',
+          visibility: 'private',
+          multiplicity: '1'
+        });
+      }
+    }
+  }
+
+  if (current) {
+    classes.push(current);
+  }
+
+  return classes;
+};
+
+const parseJsonModel = (content: string): UMLModel | null => {
+  try {
+    const parsed = JSON.parse(content) as UMLModel;
+    if (!parsed || !Array.isArray(parsed.classes) || !Array.isArray(parsed.relations)) {
+      return null;
+    }
+
+    const classes = parsed.classes.map((cls) => ({
+      id: cls.id || uuid(),
+      name: cls.name || 'Unnamed',
+      visibility: cls.visibility || 'public',
+      isAbstract: cls.isAbstract ?? false,
+      attributes: Array.isArray(cls.attributes)
+        ? cls.attributes.map((attr) => ({
+            id: attr.id || uuid(),
+            name: attr.name || 'attribute',
+            type: attr.type || 'String',
+            visibility: attr.visibility || 'public',
+            multiplicity: attr.multiplicity || '1'
+          }))
+        : [],
+      methods: Array.isArray(cls.methods)
+        ? cls.methods.map((method) => ({
+            id: method.id || uuid(),
+            name: method.name || 'operation',
+            returnType: method.returnType || 'void',
+            visibility: method.visibility || 'public',
+            parameters: Array.isArray(method.parameters)
+              ? method.parameters.map((param) => ({
+                  id: param.id || uuid(),
+                  name: param.name || 'arg',
+                  type: param.type || 'Any'
+                }))
+              : []
+          }))
+        : []
+    }));
+
+    const relations = Array.isArray(parsed.relations)
+      ? parsed.relations.map((relation) => ({
+          id: relation.id || uuid(),
+          source: relation.source,
+          target: relation.target,
+          type: relation.type || 'association',
+          cardinality: relation.cardinality || '1'
+        }))
+      : [];
+
+    return { classes, relations };
+  } catch {
+    return null;
+  }
+};
+
+const buildModelFromFiles = async (files: { name: string; content: string }[]) => {
+  let importedModel: UMLModel | null = null;
+  const classes: UMLClass[] = [];
+
+  for (const file of files) {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.json')) {
+      const jsonModel = parseJsonModel(file.content);
+      if (jsonModel) {
+        importedModel = jsonModel;
+        break;
+      }
+    } else if (name.endsWith('.java')) {
+      classes.push(...parseJavaCode(file.content));
+    } else if (name.endsWith('.py')) {
+      classes.push(...parsePythonCode(file.content));
+    }
+  }
+
+  if (importedModel) {
+    return importedModel;
+  }
+
+  const uniqueClasses = classes.reduce<Record<string, UMLClass>>((acc, cls) => {
+    if (!acc[cls.name]) acc[cls.name] = cls;
+    return acc;
+  }, {});
+
+  return {
+    classes: Object.values(uniqueClasses),
+    relations: []
+  } as UMLModel;
+};
+
 const UmlEditor: React.FC<UmlEditorProps> = ({ model, onModelChange, setStatus }) => {
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [relationType, setRelationType] = useState<RelationType>('association');
   const [relationCardinality, setRelationCardinality] = useState('1..*');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleImportClick = () => fileInputRef.current?.click();
+
+  const importCodeModel = async (file: File) => {
+    const reader = new FileReader();
+    return new Promise<{ name: string; content: string }[]>((resolve, reject) => {
+      reader.onerror = () => reject(reader.error);
+      reader.onload = async () => {
+        const result = reader.result;
+        if (!result) {
+          reject(new Error('Fichier vide')); 
+          return;
+        }
+        if (file.name.toLowerCase().endsWith('.zip')) {
+          const zip = await JSZip.loadAsync(result as ArrayBuffer);
+          const entries: { name: string; content: string }[] = [];
+          const zipFiles = Object.values(zip.files) as JSZip.JSZipObject[];
+          await Promise.all(
+            zipFiles
+              .filter((entry) => !entry.dir && /\.(json|java|py)$/i.test(entry.name))
+              .map(async (entry) => {
+                const content = await entry.async('string');
+                entries.push({ name: entry.name, content });
+              })
+          );
+          resolve(entries);
+        } else {
+          resolve([{ name: file.name, content: result as string }]);
+        }
+      };
+      if (file.name.toLowerCase().endsWith('.zip')) {
+        reader.readAsArrayBuffer(file);
+      } else {
+        reader.readAsText(file, 'utf-8');
+      }
+    });
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const files = await importCodeModel(file);
+      const importedModel = await buildModelFromFiles(files);
+      if (importedModel.classes.length === 0) {
+        setStatus('Aucun modèle importable trouvé dans le fichier.');
+        return;
+      }
+      onModelChange(importedModel);
+      setStatus(`Modèle importé depuis ${file.name}`);
+    } catch (error) {
+      console.error(error);
+      setStatus('Échec de l’import de code.');
+    } finally {
+      event.target.value = '';
+    }
+  };
 
   const modelElements = useMemo(() => transformModelToElements(model), [model]);
   const [nodes, setNodes, onNodesChange] = useNodesState(modelElements.nodes);
@@ -247,6 +560,11 @@ const UmlEditor: React.FC<UmlEditorProps> = ({ model, onModelChange, setStatus }
             <span>💾</span>
             Sauvegarder
           </button>
+          <button onClick={handleImportClick} className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 px-4 py-2 hover:bg-slate-800">
+            <span>📥</span>
+            Importer modèle
+          </button>
+          <input ref={fileInputRef} type="file" accept=".json,.zip,.java,.py" onChange={handleFileChange} className="hidden" />
           <button onClick={() => exportCode('java')} className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 px-4 py-2 hover:bg-slate-800">
             <span>☕</span>
             Générer Java
